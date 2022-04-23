@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lithammer/fuzzysearch/fuzzy"
 	"github.com/urfave/cli/v2"
 )
 
@@ -79,7 +80,7 @@ func ParseNote(reader io.Reader, path string, justHeader bool) (*Note, error) {
 					}
 					contains := false
 					for _, existingTag := range tags {
-						if strings.EqualFold(existingTag, trimmed) {
+						if fuzzy.MatchNormalizedFold(trimmed, existingTag) {
 							contains = true
 						}
 					}
