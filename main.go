@@ -17,7 +17,7 @@ import (
 )
 
 const DIVIDER = "------"
-const JOURNAL_DATE = "2006-01-02"
+const JOURNAL_DATE_FORMAT = "2006-01-02"
 
 type Note struct {
 	Path    string
@@ -116,7 +116,7 @@ func addTimestamp(file *os.File, path string, ts time.Time) error {
 		return err
 	}
 
-	note.Content = fmt.Sprintf("%v:\n\n\n%v", ts.Format(JOURNAL_DATE), note.Content)
+	note.Content = fmt.Sprintf("%v:\n\n\n%v", ts.Format(JOURNAL_DATE_FORMAT), note.Content)
 	out := []byte(fmt.Sprintf("%v%v\n\n%v", note.rawHeader, DIVIDER, note.Content))
 	file.Truncate(0)
 	wrote := 0
@@ -135,13 +135,6 @@ func exists(path string) bool {
 	return !errors.Is(err, os.ErrNotExist)
 }
 
-func BaseNoteHeader(title string) string {
-	return fmt.Sprintf(`title: %v
-tags:
-%v
-`, strings.TrimSuffix(title, ".txt"), DIVIDER)
-}
-
 func NewNoteFile(filePath string) error {
 	if err := os.MkdirAll(filepath.Dir(filePath), 0770); err != nil {
 		return err
@@ -153,39 +146,44 @@ func NewNoteFile(filePath string) error {
 	}
 	initialName := path.Base(filePath)
 
-	fmt.Fprint(f, BaseNoteHeader(initialName))
+	fmt.Fprintf(f, `title: %v
+tags:
+%v
+`, strings.TrimSuffix(initialName, ".txt"), DIVIDER,
+	)
 	defer f.Close()
 	return nil
 }
 
-func NewNote(c *cli.Context) error {
-	name := c.Args().First()
-	if !strings.HasSuffix(name, ".txt") {
-		name += ".txt"
+func checkExistance(userInput string) (string, error) {
+	if !strings.HasSuffix(userInput, ".txt") {
+		userInput += ".txt"
 	}
 	curDir, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("could not get working directory: %w", err)
+		return "", fmt.Errorf("could not get working directory: %w", err)
 	}
-	outPath := path.Join(curDir, name)
+	outPath := path.Join(curDir, userInput)
 	if exists(outPath) {
-		return fmt.Errorf("file `%v` already exists", outPath)
+		return "", fmt.Errorf("file `%v` already exists", outPath)
+	}
+	return outPath, nil
+}
+
+func NewNote(c *cli.Context) error {
+	name := c.Args().First()
+	outPath, err := checkExistance(name)
+	if err != nil {
+		return err
 	}
 	return NewNoteFile(outPath)
 }
 
 func CheckNote(c *cli.Context) error {
 	name := c.Args().First()
-	if !strings.HasSuffix(name, ".txt") {
-		name += ".txt"
-	}
-	curDir, err := os.Getwd()
+	outPath, err := checkExistance(name)
 	if err != nil {
-		return fmt.Errorf("could not get working directory: %w", err)
-	}
-	outPath := path.Join(curDir, name)
-	if !exists(outPath) {
-		return fmt.Errorf("file `%v` does not exist", outPath)
+		return err
 	}
 
 	file, err := os.Open(outPath)
@@ -205,16 +203,9 @@ func CheckNote(c *cli.Context) error {
 
 func NewEntry(c *cli.Context) error {
 	name := c.Args().First()
-	if !strings.HasSuffix(name, ".txt") {
-		name += ".txt"
-	}
-	curDir, err := os.Getwd()
+	outPath, err := checkExistance(name)
 	if err != nil {
-		return fmt.Errorf("could not get working directory: %w", err)
-	}
-	outPath := path.Join(curDir, name)
-	if !exists(outPath) {
-		return fmt.Errorf("file `%v` does not exist", outPath)
+		return err
 	}
 	file, err := os.OpenFile(outPath, os.O_RDWR|os.O_APPEND, os.ModePerm)
 	if err != nil {
@@ -232,16 +223,9 @@ func NewEntry(c *cli.Context) error {
 
 func CatNote(c *cli.Context) error {
 	name := c.Args().First()
-	if !strings.HasSuffix(name, ".txt") {
-		name += ".txt"
-	}
-	curDir, err := os.Getwd()
+	outPath, err := checkExistance(name)
 	if err != nil {
-		return fmt.Errorf("could not get working directory: %w", err)
-	}
-	outPath := path.Join(curDir, name)
-	if !exists(outPath) {
-		return fmt.Errorf("file `%v` does not exist", outPath)
+		return err
 	}
 
 	file, err := os.Open(outPath)
