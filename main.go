@@ -16,6 +16,8 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+var build = "dev"
+
 const DIVIDER = "------"
 const JOURNAL_DATE_FORMAT = "2006-01-02"
 
@@ -314,6 +316,11 @@ func CheckTags(c *cli.Context) error {
 	return nil
 }
 
+func Version(_ *cli.Context) error {
+	fmt.Printf("notes version %v\n", build)
+	return nil
+}
+
 func main() {
 	app := &cli.App{
 		Commands: []*cli.Command{
@@ -343,6 +350,11 @@ func main() {
 				Aliases: []string{"e"},
 				Usage:   "adds todays timestamp to the top of content",
 				Action:  NewEntry,
+			},
+			{
+				Name:   "version",
+				Usage:  "current version",
+				Action: Version,
 			},
 		},
 	}
