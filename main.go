@@ -158,6 +158,9 @@ tags:
 }
 
 func checkExistance(userInput string) (string, error) {
+	if len(userInput) == 0 {
+		return "", fmt.Errorf("empty filename")
+	}
 	if !strings.HasSuffix(userInput, ".txt") {
 		userInput += ".txt"
 	}
