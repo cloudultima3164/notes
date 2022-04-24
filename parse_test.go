@@ -84,10 +84,10 @@ tags: bumbumbum, POW, AnotherOneRidesTheBus, !
 	for name, struc := range tests {
 		t.Run(name, func(t *testing.T) {
 			got, err := parseNoteConbini(struc.name, struc.headerOnly)
-			got_deref := *got
 			if err != nil {
 				t.Fatalf("error occured while parsing note: %v", err)
 			}
+			got_deref := *got
 			if struc.want.Path != got_deref.Path {
 				t.Fatalf("Path mismatch:\nexpected: %v\ngot: %v", struc.want.Path, got_deref.Path)
 			}
