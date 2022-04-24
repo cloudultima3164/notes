@@ -20,10 +20,6 @@ var (
 			Background(lipgloss.Color("#25A065")).
 			Padding(0, 1)
 	selectedItemStyle = lipgloss.NewStyle().PaddingLeft(2).Foreground(lipgloss.Color("170"))
-
-	statusMessageStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.AdaptiveColor{Light: "#04B575", Dark: "#04B575"}).
-				Render
 )
 
 type listKeyMap struct {
@@ -34,50 +30,6 @@ type listKeyMap struct {
 	toggleHelpMenu   key.Binding
 	//insertItem       key.Binding
 }
-
-//func newItemDelegate(keys *delegateKeyMap) list.DefaultDelegate {
-//	d := list.NewDefaultDelegate()
-//
-//	d.UpdateFunc = func(msg tea.Msg, m *list.Model) tea.Cmd {
-//		var title string
-//
-//		if i, ok := m.SelectedItem().(item); ok {
-//			title = i.Title()
-//		} else {
-//			return nil
-//		}
-//
-//		switch msg := msg.(type) {
-//		case tea.KeyMsg:
-//			switch {
-//			case key.Matches(msg, keys.choose):
-//				return m.NewStatusMessage(statusMessageStyle("You chose " + title))
-//
-//			case key.Matches(msg, keys.remove):
-//				index := m.Index()
-//				m.RemoveItem(index)
-//				if len(m.Items()) == 0 {
-//					keys.remove.SetEnabled(false)
-//				}
-//				return m.NewStatusMessage(statusMessageStyle("Deleted " + title))
-//			}
-//		}
-//
-//		return nil
-//	}
-//
-//	help := []key.Binding{keys.choose, keys.remove}
-//
-//	d.ShortHelpFunc = func() []key.Binding {
-//		return help
-//	}
-//
-//	d.FullHelpFunc = func() [][]key.Binding {
-//		return [][]key.Binding{help}
-//	}
-//
-//	return d
-//}
 
 type delegateKeyMap struct {
 	choose key.Binding
@@ -128,7 +80,7 @@ func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list
 		}
 	}
 
-	fmt.Fprintf(w, fn(str))
+	fmt.Fprint(w, fn(str))
 }
 
 func newDelegateKeyMap() *delegateKeyMap {
