@@ -12,10 +12,12 @@ import (
 	"sync"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/lithammer/fuzzysearch/fuzzy"
 	"github.com/spf13/cobra"
 )
 
+// This gets overwritten at build time with goreleaser
 var build = "dev"
 
 const DIVIDER = "------"
@@ -28,6 +30,12 @@ type Note struct {
 	Content string
 	// header may include metadata that's not necessarily tracked in this struct
 	rawHeader string
+}
+
+//func (i Note) Title() string       { return i.Title }
+func (i Note) Description() string { return strings.Join(i.Tags, ", ") }
+func (i Note) FilterValue() string {
+	return fmt.Sprintf("%s%s%s", i.Title, i.Path, strings.Join(i.Tags, ""))
 }
 
 func ParseNote(reader io.Reader, path string, justHeader bool) (*Note, error) {
@@ -237,31 +245,6 @@ func files(dir string) []string {
 	return results
 }
 
-func checkTags(in chan string, out chan Note, wg *sync.WaitGroup, targetTag string) {
-	for filename := range in {
-		f, err := os.Open(filename)
-		if err != nil {
-			fmt.Printf("could not open file: %v", err)
-			continue
-		}
-		note, err := ParseNote(f, filename, true)
-		if err != nil {
-			fmt.Printf("could not parse file: %v", err)
-			continue
-		}
-		f.Close()
-
-		for _, val := range note.Tags {
-			if strings.Contains(strings.ToLower(val), strings.ToLower(targetTag)) {
-				out <- *note
-				continue
-			}
-		}
-
-	}
-	wg.Done()
-}
-
 func CheckTags(input []string) error {
 	curDir, err := os.Getwd()
 	if err != nil {
@@ -275,7 +258,7 @@ func CheckTags(input []string) error {
 	in := make(chan string, 10)
 	out := make(chan Note, len(fileList))
 	for i := 0; i < 10; i++ {
-		go checkTags(in, out, wg, searchTag)
+		go parseWorker(in, out, wg, true)
 	}
 	for _, fileName := range fileList {
 		in <- fileName
@@ -285,10 +268,65 @@ func CheckTags(input []string) error {
 	wg.Wait()
 	close(out)
 	for result := range out {
-		fmt.Printf("%v : %v\n", result.Title, result.Path)
+		for _, val := range result.Tags {
+			if strings.Contains(strings.ToLower(val), strings.ToLower(searchTag)) {
+				fmt.Printf("%v : %v\n", result.Title, result.Path)
+				break
+			}
+		}
 	}
 
 	return nil
+}
+
+func parseWorker(in chan string, out chan Note, wg *sync.WaitGroup, justHeader bool) {
+	for filename := range in {
+		f, err := os.Open(filename)
+		if err != nil {
+			fmt.Printf("could not open file: %v", err)
+			continue
+		}
+		note, err := ParseNote(f, filename, justHeader)
+		if err != nil {
+			fmt.Printf("could not parse file: %v", err)
+			continue
+		}
+		f.Close()
+
+		out <- *note
+	}
+	wg.Done()
+}
+
+func collectFiles(justHeader bool) ([]Note, error) {
+	curDir, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("could not get working directory: %w", err)
+	}
+	fileList := files(curDir)
+	wg := &sync.WaitGroup{}
+
+	wg.Add(10)
+	in := make(chan string, 10)
+	out := make(chan Note, len(fileList))
+	for i := 0; i < 10; i++ {
+		go parseWorker(in, out, wg, justHeader)
+	}
+	for _, fileName := range fileList {
+		in <- fileName
+	}
+	close(in)
+
+	wg.Wait()
+	close(out)
+	results := make([]Note, len(fileList))
+	c := 0
+	for result := range out {
+		results[c] = result
+		c++
+	}
+
+	return results, nil
 }
 
 var catCmd = &cobra.Command{
@@ -296,8 +334,8 @@ var catCmd = &cobra.Command{
 	Example: "notes cat <filepath>",
 	Short:   "output the contents of a file",
 	Args: func(cmd *cobra.Command, args []string) error {
-		if len(args) != 1 {
-			return fmt.Errorf("got an unexpected number of args (%v), expected %v", len(args), 1)
+		if len(args) == 0 {
+			return nil
 		}
 		// TODO: if no filename is provided go into an interactive mode
 		preparedFileName, err := checkExistance(args[0], true)
@@ -310,6 +348,19 @@ var catCmd = &cobra.Command{
 		return nil
 	},
 	Run: func(_ *cobra.Command, args []string) {
+		if len(args) == 0 {
+			m, err := tea.NewProgram(newModel("Select File to Cat", false)).StartReturningModel()
+			if err != nil {
+				fmt.Printf("Problem trying to get selection: %v", err)
+			}
+			mod, ok := m.(model)
+			if !ok {
+				fmt.Println("Could not read selection")
+			}
+			fmt.Printf("%s", mod.choice.Content)
+			return
+
+		}
 		if err := CatNote(args[0]); err != nil {
 			fmt.Printf("Problem trying to cat: %v", err)
 		}
@@ -333,8 +384,8 @@ var newEntryCmd = &cobra.Command{
 	Short:   "adds a YYYY-MM-DD date at the top of the provided note",
 	Example: "notes entry <directory/file>",
 	Args: func(cmd *cobra.Command, args []string) error {
-		if len(args) != 1 {
-			return fmt.Errorf("got an unexpected number of args (%v), expected %v", len(args), 1)
+		if len(args) == 0 {
+			return nil
 		}
 		// TODO: if no filename is provided go into an interactive mode
 		preparedFileName, err := checkExistance(args[0], true)
@@ -347,13 +398,27 @@ var newEntryCmd = &cobra.Command{
 		return nil
 	},
 	Run: func(_ *cobra.Command, args []string) {
-		file, err := os.OpenFile(args[0], os.O_RDWR|os.O_APPEND, os.ModePerm)
+		var selectedFile string
+		if len(args) == 0 {
+			m, err := tea.NewProgram(newModel("Select File to Cat", true)).StartReturningModel()
+			if err != nil {
+				fmt.Printf("Problem trying to get selection: %v", err)
+			}
+			mod, ok := m.(model)
+			if !ok {
+				fmt.Println("Could not read selection")
+			}
+			selectedFile = mod.choice.Path
+		} else {
+			selectedFile = args[0]
+		}
+		file, err := os.OpenFile(selectedFile, os.O_RDWR|os.O_APPEND, os.ModePerm)
 		if err != nil {
 			fmt.Printf("Could not open file: %v, %v", args[0], err)
 		}
 		defer file.Close()
 
-		err = addTimestamp(file, args[0], time.Now())
+		err = addTimestamp(file, selectedFile, time.Now())
 		if err != nil {
 			fmt.Printf("Could not add timestamp to file: %v", err)
 		}
