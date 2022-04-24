@@ -31,7 +31,8 @@ Dear Diary,
 Today, I started adding unit tests to the program that created you.
 I promise to look after you, and do you no harm by introducing bugs that might truncate your contents, leaving you empty inside.
 
-I look forward to working with you.`,
+I look forward to working with you.
+`,
 				rawHeader: "",
 			},
 		},
@@ -55,7 +56,8 @@ in:         @@@@@@@@@@@@@@@@..,,,,,...,***
 1...:       @@@@@(((((((((((@@@@@@@@@@@@@@
 DROPPING:   @@@%(((((((((@@@@@@@@@@@@@@@@@
 THE:        @%%%%%((((,@@@@@@@@@@@@@@@@@@@
-<howling>:  @@@%%%%%@@@@@@@@@@@@@@@@@@@@@@`,
+<howling>:  @@@%%%%%@@@@@@@@@@@@@@@@@@@@@@
+`,
 			},
 		},
 		"exclamation tag": {
