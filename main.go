@@ -415,13 +415,17 @@ var newEntryCmd = &cobra.Command{
 		file, err := os.OpenFile(selectedFile, os.O_RDWR|os.O_APPEND, os.ModePerm)
 		if err != nil {
 			fmt.Printf("Could not open file: %v, %v", args[0], err)
+			return
 		}
 		defer file.Close()
 
 		err = addTimestamp(file, selectedFile, time.Now())
 		if err != nil {
 			fmt.Printf("Could not add timestamp to file: %v", err)
+			return
 		}
+		fmt.Printf("Added %v entry line to %v", time.Now().Format(JOURNAL_DATE_FORMAT), selectedFile)
+
 	},
 }
 
