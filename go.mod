@@ -9,8 +9,6 @@ require (
 	github.com/lithammer/fuzzysearch v1.1.3
 	github.com/spf13/cobra v1.4.0
 )
-<<<<<<< HEAD
-=======
 
 require (
 	github.com/atotto/clipboard v0.1.4 // indirect
@@ -29,4 +27,3 @@ require (
 	golang.org/x/term v0.0.0-20210422114643-f5beecf764ed // indirect
 	golang.org/x/text v0.3.7 // indirect
 )
->>>>>>> main
