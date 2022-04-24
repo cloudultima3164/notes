@@ -45,7 +45,8 @@ I look forward to working with you.
 				Tags: []string{ "DROPTHEMIC" },
 				Content: "",
 				rawHeader:
-`mic:        @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+`
+mic:        @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 drop:       @@@@@@@@@@@@@@@@@@...,,,,,,,*@
 commencing: @@@@@@@@@@@@@@@@@,,,,..,,,,,**
 in:         @@@@@@@@@@@@@@@@..,,,,,...,***
