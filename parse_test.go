@@ -33,7 +33,10 @@ I promise to look after you, and do you no harm by introducing bugs that might t
 
 I look forward to working with you.
 `,
-				rawHeader: "",
+				rawHeader: 
+`title: my_test_diary
+tags:secret,plzdontlook,test
+`,
 			},
 		},
 		"ascii art in raw header": {
@@ -45,7 +48,8 @@ I look forward to working with you.
 				Tags: []string{ "DROPTHEMIC" },
 				Content: "",
 				rawHeader:
-`
+`title: mic_drop
+tags: DROPTHEMIC
 mic:        @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 drop:       @@@@@@@@@@@@@@@@@@...,,,,,,,*@
 commencing: @@@@@@@@@@@@@@@@@,,,,..,,,,,**
@@ -69,7 +73,10 @@ THE:        @%%%%%((((,@@@@@@@@@@@@@@@@@@@
 				Title: "another_one_rides_the_bus",
 				Tags: []string{ "bumbumbum", "POW", "AnotherOneRidesTheBus", "!" },
 				Content: "",
-				rawHeader: "",
+				rawHeader: 
+`title: another_one_rides_the_bus
+tags: bumbumbum, POW, AnotherOneRidesTheBus, !
+`,
 			},
 		},
 	}
@@ -77,11 +84,24 @@ THE:        @%%%%%((((,@@@@@@@@@@@@@@@@@@@
 	for name, struc := range tests {
 		t.Run(name, func(t *testing.T) {
 			got, err := parseNoteConbini(struc.name, struc.headerOnly)
+			got_deref := *got
 			if err != nil {
 				t.Fatalf("error occured while parsing note: %v", err)
 			}
-			if !reflect.DeepEqual(struc.want, got) {
-				t.Fatalf("expected: %v\ngot: %v", struc.want, *got)
+			if struc.want.Path != got_deref.Path {
+				t.Fatalf("Path mismatch:\nexpected: %v\ngot: %v", struc.want.Path, got_deref.Path)
+			}
+			if struc.want.Title != got_deref.Title {
+				t.Fatalf("Title mismatch:\nexpected: %v\ngot: %v", struc.want.Title, got_deref.Title)
+			}
+			if !reflect.DeepEqual(struc.want.Tags, got_deref.Tags) {
+				t.Fatalf("Tags mismatch:\nexpected: %v\ngot: %v", struc.want.Tags, got_deref.Tags)
+			}
+			if struc.want.Content != got_deref.Content {
+				t.Fatalf("Content mismatch:\nexpected: %v\ngot: %v", struc.want.Content, got_deref.Content)
+			}
+			if struc.want.rawHeader != got_deref.rawHeader {
+				t.Fatalf("rawHeader mismatch:\nexpected: %v\ngot: %v", struc.want.rawHeader, got_deref.rawHeader)
 			}
 		})
 	}
@@ -114,7 +134,7 @@ func parseNoteConbini(name string, headerOnly bool) (*Note, error) {
 	}
 	defer file.Close()
 
-	note, err := ParseNote(file, path, false)
+	note, err := ParseNote(file, path, headerOnly)
 	if err != nil {
 		return nil, fmt.Errorf("could not parse file: %v", err)
 	}
