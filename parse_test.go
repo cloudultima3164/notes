@@ -85,23 +85,23 @@ tags: bumbumbum, POW, AnotherOneRidesTheBus, !
 		t.Run(name, func(t *testing.T) {
 			got, err := parseNoteConbini(struc.name, struc.headerOnly)
 			if err != nil {
-				t.Fatalf("error occured while parsing note: %v", err)
+				t.Errorf("error occured while parsing note: %v", err)
 			}
 			got_deref := *got
 			if struc.want.Path != got_deref.Path {
-				t.Fatalf("Path mismatch:\nexpected: %v\ngot: %v", struc.want.Path, got_deref.Path)
+				t.Errorf("Path mismatch:\nexpected: %v\ngot: %v", struc.want.Path, got_deref.Path)
 			}
 			if struc.want.Title != got_deref.Title {
-				t.Fatalf("Title mismatch:\nexpected: %v\ngot: %v", struc.want.Title, got_deref.Title)
+				t.Errorf("Title mismatch:\nexpected: %v\ngot: %v", struc.want.Title, got_deref.Title)
 			}
 			if !reflect.DeepEqual(struc.want.Tags, got_deref.Tags) {
-				t.Fatalf("Tags mismatch:\nexpected: %v\ngot: %v", struc.want.Tags, got_deref.Tags)
+				t.Errorf("Tags mismatch:\nexpected: %v\ngot: %v", struc.want.Tags, got_deref.Tags)
 			}
 			if struc.want.Content != got_deref.Content {
-				t.Fatalf("Content mismatch:\nexpected: %v\ngot: %v", struc.want.Content, got_deref.Content)
+				t.Errorf("Content mismatch:\nexpected: %v\ngot: %v", struc.want.Content, got_deref.Content)
 			}
 			if struc.want.rawHeader != got_deref.rawHeader {
-				t.Fatalf("rawHeader mismatch:\nexpected: %v\ngot: %v", struc.want.rawHeader, got_deref.rawHeader)
+				t.Errorf("rawHeader mismatch:\nexpected: %v\ngot: %v", struc.want.rawHeader, got_deref.rawHeader)
 			}
 		})
 	}
