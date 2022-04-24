@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -13,11 +12,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/urfave/cli/v2"
+	"github.com/lithammer/fuzzysearch/fuzzy"
+	"github.com/spf13/cobra"
 )
 
+var build = "dev"
+
 const DIVIDER = "------"
-const JOURNAL_DATE = "2006-01-02"
+const JOURNAL_DATE_FORMAT = "2006-01-02"
 
 type Note struct {
 	Path    string
@@ -77,7 +79,7 @@ func ParseNote(reader io.Reader, path string, justHeader bool) (*Note, error) {
 					}
 					contains := false
 					for _, existingTag := range tags {
-						if strings.EqualFold(existingTag, trimmed) {
+						if fuzzy.MatchNormalizedFold(trimmed, existingTag) {
 							contains = true
 						}
 					}
@@ -116,7 +118,7 @@ func addTimestamp(file *os.File, path string, ts time.Time) error {
 		return err
 	}
 
-	note.Content = fmt.Sprintf("%v:\n\n\n%v", ts.Format(JOURNAL_DATE), note.Content)
+	note.Content = fmt.Sprintf("%v:\n\n\n%v", ts.Format(JOURNAL_DATE_FORMAT), note.Content)
 	out := []byte(fmt.Sprintf("%v%v\n\n%v", note.rawHeader, DIVIDER, note.Content))
 	file.Truncate(0)
 	wrote := 0
@@ -135,13 +137,6 @@ func exists(path string) bool {
 	return !errors.Is(err, os.ErrNotExist)
 }
 
-func BaseNoteHeader(title string) string {
-	return fmt.Sprintf(`title: %v
-tags:
-%v
-`, strings.TrimSuffix(title, ".txt"), DIVIDER)
-}
-
 func NewNoteFile(filePath string) error {
 	if err := os.MkdirAll(filepath.Dir(filePath), 0770); err != nil {
 		return err
@@ -153,104 +148,70 @@ func NewNoteFile(filePath string) error {
 	}
 	initialName := path.Base(filePath)
 
-	fmt.Fprint(f, BaseNoteHeader(initialName))
+	fmt.Fprintf(f, `title: %v
+tags:
+%v
+`, strings.TrimSuffix(initialName, ".txt"), DIVIDER,
+	)
 	defer f.Close()
 	return nil
 }
 
-func NewNote(c *cli.Context) error {
-	name := c.Args().First()
-	if !strings.HasSuffix(name, ".txt") {
-		name += ".txt"
+func checkExistance(userInput string, wantExistance bool) (string, error) {
+	if len(userInput) == 0 {
+		return "", fmt.Errorf("empty filename")
+	}
+	if !strings.HasSuffix(userInput, ".txt") {
+		userInput += ".txt"
 	}
 	curDir, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("could not get working directory: %w", err)
+		return "", fmt.Errorf("could not get working directory: %w", err)
 	}
-	outPath := path.Join(curDir, name)
-	if exists(outPath) {
-		return fmt.Errorf("file `%v` already exists", outPath)
+	outPath := path.Join(curDir, userInput)
+	if exists(outPath) != wantExistance {
+		var message string
+		if wantExistance {
+			message = "file `%v` does not exist"
+		} else {
+			message = "file `%v` already exists"
+		}
+		return "", fmt.Errorf(message, outPath)
 	}
-	return NewNoteFile(outPath)
+	return outPath, nil
 }
 
-func CheckNote(c *cli.Context) error {
-	name := c.Args().First()
-	if !strings.HasSuffix(name, ".txt") {
-		name += ".txt"
-	}
-	curDir, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("could not get working directory: %w", err)
-	}
-	outPath := path.Join(curDir, name)
-	if !exists(outPath) {
-		return fmt.Errorf("file `%v` does not exist", outPath)
-	}
+// TODO: hmmm maybe a validate files command?
+//func CheckNote(c *cli.Context) error {
+//	name := c.Args().First()
+//	outPath, err := checkExistance(name, true)
+//	if err != nil {
+//		return err
+//	}
+//
+//	file, err := os.Open(outPath)
+//	if err != nil {
+//		return fmt.Errorf("could not open file: %v, %w", outPath, err)
+//	}
+//	defer file.Close()
+//
+//	note, err := ParseNote(file, outPath, false)
+//	if err != nil {
+//		return fmt.Errorf("could not parse file: %w", err)
+//	}
+//	fmt.Printf("loaded file: \n「%v」\n%+q\n%v\n", note.Title, note.Tags, note.Content)
+//
+//	return nil
+//}
 
-	file, err := os.Open(outPath)
+func CatNote(filePath string) error {
+	file, err := os.Open(filePath)
 	if err != nil {
-		return fmt.Errorf("could not open file: %v, %w", outPath, err)
+		return fmt.Errorf("could not open file: %v, %w", filePath, err)
 	}
 	defer file.Close()
 
-	note, err := ParseNote(file, outPath, false)
-	if err != nil {
-		return fmt.Errorf("could not parse file: %w", err)
-	}
-	fmt.Printf("loaded file: \n「%v」\n%+q\n%v\n", note.Title, note.Tags, note.Content)
-
-	return nil
-}
-
-func NewEntry(c *cli.Context) error {
-	name := c.Args().First()
-	if !strings.HasSuffix(name, ".txt") {
-		name += ".txt"
-	}
-	curDir, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("could not get working directory: %w", err)
-	}
-	outPath := path.Join(curDir, name)
-	if !exists(outPath) {
-		return fmt.Errorf("file `%v` does not exist", outPath)
-	}
-	file, err := os.OpenFile(outPath, os.O_RDWR|os.O_APPEND, os.ModePerm)
-	if err != nil {
-		return fmt.Errorf("could not open file: %v, %w", outPath, err)
-	}
-	defer file.Close()
-
-	err = addTimestamp(file, outPath, time.Now())
-	if err != nil {
-		return fmt.Errorf("could not add timestamp to file: %w", err)
-	}
-
-	return nil
-}
-
-func CatNote(c *cli.Context) error {
-	name := c.Args().First()
-	if !strings.HasSuffix(name, ".txt") {
-		name += ".txt"
-	}
-	curDir, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("could not get working directory: %w", err)
-	}
-	outPath := path.Join(curDir, name)
-	if !exists(outPath) {
-		return fmt.Errorf("file `%v` does not exist", outPath)
-	}
-
-	file, err := os.Open(outPath)
-	if err != nil {
-		return fmt.Errorf("could not open file: %v, %w", outPath, err)
-	}
-	defer file.Close()
-
-	note, err := ParseNote(file, outPath, false)
+	note, err := ParseNote(file, filePath, false)
 	if err != nil {
 		return fmt.Errorf("could not parse file: %w", err)
 	}
@@ -301,14 +262,14 @@ func checkTags(in chan string, out chan Note, wg *sync.WaitGroup, targetTag stri
 	wg.Done()
 }
 
-func CheckTags(c *cli.Context) error {
+func CheckTags(input []string) error {
 	curDir, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("could not get working directory: %w", err)
 	}
 	fileList := files(curDir)
 	wg := &sync.WaitGroup{}
-	searchTag := c.Args().First()
+	searchTag := strings.Join(input, " ")
 
 	wg.Add(10)
 	in := make(chan string, 10)
@@ -330,41 +291,129 @@ func CheckTags(c *cli.Context) error {
 	return nil
 }
 
-func main() {
-	app := &cli.App{
-		Commands: []*cli.Command{
-			{
-				Name:    "new",
-				Aliases: []string{"n"},
-				Usage:   "add a new note",
-				Action:  NewNote,
-			},
-			{
-				Name:   "check",
-				Usage:  "parse check",
-				Action: CheckNote,
-			},
-			{
-				Name:   "cat",
-				Usage:  "outputs the contents of the file without header",
-				Action: CatNote,
-			},
-			{
-				Name:   "tagged",
-				Usage:  "find files with tag",
-				Action: CheckTags,
-			},
-			{
-				Name:    "entry",
-				Aliases: []string{"e"},
-				Usage:   "adds todays timestamp to the top of content",
-				Action:  NewEntry,
-			},
-		},
-	}
+var catCmd = &cobra.Command{
+	Use:     "cat",
+	Example: "notes cat <filepath>",
+	Short:   "output the contents of a file",
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) != 1 {
+			return fmt.Errorf("got an unexpected number of args (%v), expected %v", len(args), 1)
+		}
+		// TODO: if no filename is provided go into an interactive mode
+		preparedFileName, err := checkExistance(args[0], true)
+		if err != nil {
+			return err
+		}
+		args[0] = preparedFileName
+		cmd.SetArgs(args)
 
-	err := app.Run(os.Args)
-	if err != nil {
-		log.Fatal(err)
+		return nil
+	},
+	Run: func(_ *cobra.Command, args []string) {
+		if err := CatNote(args[0]); err != nil {
+			fmt.Printf("Problem trying to cat: %v", err)
+		}
+	},
+}
+
+var checkTagsCmd = &cobra.Command{
+	Use:   "tagged",
+	Short: "lists out files that match the tag",
+	Args:  cobra.MinimumNArgs(1),
+	Run: func(_ *cobra.Command, args []string) {
+		if err := CheckTags(args[0:]); err != nil {
+			fmt.Printf("Problem trying to check for tags: %v", err)
+		}
+	},
+}
+
+var newEntryCmd = &cobra.Command{
+	Use:     "entry",
+	Aliases: []string{"e"},
+	Short:   "adds a YYYY-MM-DD date at the top of the provided note",
+	Example: "notes entry <directory/file>",
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) != 1 {
+			return fmt.Errorf("got an unexpected number of args (%v), expected %v", len(args), 1)
+		}
+		// TODO: if no filename is provided go into an interactive mode
+		preparedFileName, err := checkExistance(args[0], true)
+		if err != nil {
+			return err
+		}
+		args[0] = preparedFileName
+		cmd.SetArgs(args)
+
+		return nil
+	},
+	Run: func(_ *cobra.Command, args []string) {
+		file, err := os.OpenFile(args[0], os.O_RDWR|os.O_APPEND, os.ModePerm)
+		if err != nil {
+			fmt.Printf("Could not open file: %v, %v", args[0], err)
+		}
+		defer file.Close()
+
+		err = addTimestamp(file, args[0], time.Now())
+		if err != nil {
+			fmt.Printf("Could not add timestamp to file: %v", err)
+		}
+	},
+}
+
+var newNoteCmd = &cobra.Command{
+	Use:     "new",
+	Aliases: []string{"n"},
+	Short:   "creates a new note at the given path/name",
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) != 1 {
+			return fmt.Errorf("got an unexpected number of args (%v), expected %v", len(args), 1)
+		}
+		// TODO: if no filename is provided go into an interactive mode
+		preparedFileName, err := checkExistance(args[0], false)
+		if err != nil {
+			return err
+		}
+		args[0] = preparedFileName
+		cmd.SetArgs(args)
+
+		return nil
+	},
+	Run: func(_ *cobra.Command, args []string) {
+		if err := NewNoteFile(args[0]); err != nil {
+			fmt.Printf("Problem trying to cat: %v", err)
+		}
+	},
+}
+
+var versionCmd = &cobra.Command{
+	Use: "version",
+	Run: func(_ *cobra.Command, _ []string) {
+		fmt.Printf("notes %v\n", build)
+	},
+}
+
+var rootCmd = &cobra.Command{
+	Use:   "notes",
+	Short: "Notes is a cli toolbox for plain text notes",
+	Long: `A cli toolbox for creating and managing plain text notes. 
+	all files are .txt so you do not need to specify .txt in the cli`,
+}
+
+func init() {
+	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(checkTagsCmd)
+	rootCmd.AddCommand(catCmd)
+	rootCmd.AddCommand(newNoteCmd)
+	rootCmd.AddCommand(newEntryCmd)
+}
+
+func Execute() {
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
 	}
+}
+
+func main() {
+	Execute()
 }
