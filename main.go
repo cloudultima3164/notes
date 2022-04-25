@@ -1,10 +1,8 @@
 package main
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -13,7 +11,6 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/lithammer/fuzzysearch/fuzzy"
 	"github.com/spf13/cobra"
 )
 
@@ -36,88 +33,6 @@ type Note struct {
 func (i Note) Description() string { return strings.Join(i.Tags, ", ") }
 func (i Note) FilterValue() string {
 	return fmt.Sprintf("%s%s%s", i.Title, i.Path, strings.Join(i.Tags, ""))
-}
-
-func ParseNote(reader io.Reader, path string, justHeader bool) (*Note, error) {
-	in := bufio.NewReader(reader)
-	var curLine string
-	done := false
-	isHeader := true
-	buf := make([]byte, 2000)
-	result := &Note{
-		Path: path,
-	}
-	for !done {
-		if isHeader {
-			bytes, prefix, err := in.ReadLine()
-			if errors.Is(err, io.EOF) {
-				done = true
-			}
-			curLine += string(bytes)
-			// prefix means it wasn't able to stick the full thing into the buffer
-			if prefix {
-				continue
-			}
-			if strings.TrimSpace(curLine) == DIVIDER {
-				isHeader = false
-				curLine = ""
-				continue
-			}
-			result.rawHeader += fmt.Sprintf("%v\n", curLine)
-			headerData := strings.Split(curLine, ":")
-			if len(headerData) < 2 {
-				fmt.Println(result.rawHeader)
-				return nil, fmt.Errorf("could not parse header line: %v", curLine)
-			}
-			field := headerData[0]
-			value := strings.Join(headerData[1:], ":")
-			switch strings.TrimSpace(strings.ToLower(field)) {
-			case "title":
-				result.Title = strings.TrimSpace(value)
-			case "tags":
-				if len(value) == 0 {
-					break
-				}
-				splitVal := strings.Split(value, ",")
-				tags := make([]string, 0)
-				for _, val := range splitVal {
-					trimmed := strings.TrimSpace(val)
-					if len(trimmed) == 0 {
-						continue
-					}
-					contains := false
-					for _, existingTag := range tags {
-						if fuzzy.MatchNormalizedFold(trimmed, existingTag) {
-							contains = true
-						}
-					}
-					if !contains {
-						tags = append(tags, trimmed)
-					}
-				}
-				if len(tags) > 0 {
-					result.Tags = tags
-				}
-			}
-			curLine = ""
-		} else if !justHeader {
-			bytesRead, err := in.Read(buf)
-			if errors.Is(err, io.EOF) {
-				done = true
-			}
-			if bytesRead > 0 {
-				curLine += string(buf[:bytesRead])
-			}
-		}
-		if justHeader && !isHeader {
-			done = true
-		}
-
-	}
-	if !justHeader {
-		result.Content = curLine
-	}
-	return result, nil
 }
 
 func addTimestamp(file *os.File, path string, ts time.Time) error {
@@ -331,13 +246,13 @@ func collectFiles(justHeader bool) ([]Note, error) {
 
 var catCmd = &cobra.Command{
 	Use:     "cat",
-	Example: "notes cat <filepath>",
-	Short:   "output the contents of a file",
+	Example: "notes cat [filepath]",
+	Short:   "output the contents of a note",
+	Long:    "output the contents of a note. if no note is specified, it goes into an interactive mode to select a note.",
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 {
 			return nil
 		}
-		// TODO: if no filename is provided go into an interactive mode
 		preparedFileName, err := checkExistance(args[0], true)
 		if err != nil {
 			return err
@@ -349,13 +264,20 @@ var catCmd = &cobra.Command{
 	},
 	Run: func(_ *cobra.Command, args []string) {
 		if len(args) == 0 {
-			m, err := tea.NewProgram(newModel("Select File to Cat", false)).StartReturningModel()
+			mod, err := NewFileSelector("Select File to Add an Entry to", true)
+			if err != nil {
+				fmt.Printf("Could not select a file: %v", err)
+				return
+			}
+			m, err := tea.NewProgram(mod).StartReturningModel()
 			if err != nil {
 				fmt.Printf("Problem trying to get selection: %v", err)
+				return
 			}
 			mod, ok := m.(model)
 			if !ok {
 				fmt.Println("Could not read selection")
+				return
 			}
 			fmt.Printf("%s", mod.choice.Content)
 			return
@@ -381,13 +303,13 @@ var checkTagsCmd = &cobra.Command{
 var newEntryCmd = &cobra.Command{
 	Use:     "entry",
 	Aliases: []string{"e"},
-	Short:   "adds a YYYY-MM-DD date at the top of the provided note",
-	Example: "notes entry <directory/file>",
+	Short:   "adds today's YYYY-MM-DD date at the top of the provided note",
+	Long:    "adds today's YYYY-MM-DD date at the top of the provided note. if no note is specified, it goes into an interactive mode to select one.",
+	Example: "notes entry [directory/file]",
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 {
 			return nil
 		}
-		// TODO: if no filename is provided go into an interactive mode
 		preparedFileName, err := checkExistance(args[0], true)
 		if err != nil {
 			return err
@@ -400,13 +322,20 @@ var newEntryCmd = &cobra.Command{
 	Run: func(_ *cobra.Command, args []string) {
 		var selectedFile string
 		if len(args) == 0 {
-			m, err := tea.NewProgram(newModel("Select File to Cat", true)).StartReturningModel()
+			mod, err := NewFileSelector("Select File to Add a Date Entry to", true)
+			if err != nil {
+				fmt.Printf("Could not select a file: %v", err)
+				return
+			}
+			m, err := tea.NewProgram(mod).StartReturningModel()
 			if err != nil {
 				fmt.Printf("Problem trying to get selection: %v", err)
+				return
 			}
 			mod, ok := m.(model)
 			if !ok {
 				fmt.Println("Could not read selection")
+				return
 			}
 			selectedFile = mod.choice.Path
 		} else {

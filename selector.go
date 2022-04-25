@@ -28,12 +28,10 @@ type listKeyMap struct {
 	toggleStatusBar  key.Binding
 	togglePagination key.Binding
 	toggleHelpMenu   key.Binding
-	//insertItem       key.Binding
 }
 
 type delegateKeyMap struct {
 	choose key.Binding
-	remove key.Binding
 }
 
 // Additional short help entries. This satisfies the help.KeyMap interface and
@@ -41,7 +39,6 @@ type delegateKeyMap struct {
 func (d delegateKeyMap) ShortHelp() []key.Binding {
 	return []key.Binding{
 		d.choose,
-		d.remove,
 	}
 }
 
@@ -51,7 +48,6 @@ func (d delegateKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{
 			d.choose,
-			d.remove,
 		},
 	}
 }
@@ -87,21 +83,13 @@ func newDelegateKeyMap() *delegateKeyMap {
 	return &delegateKeyMap{
 		choose: key.NewBinding(
 			key.WithKeys("enter"),
-			key.WithHelp("enter", "choose"),
-		),
-		remove: key.NewBinding(
-			key.WithKeys("x", "backspace"),
-			key.WithHelp("x", "delete"),
+			key.WithHelp("enter", "Select"),
 		),
 	}
 }
 
 func newListKeyMap() *listKeyMap {
 	return &listKeyMap{
-		//		insertItem: key.NewBinding(
-		//			key.WithKeys("a"),
-		//			key.WithHelp("a", "add item"),
-		//		),
 		toggleSpinner: key.NewBinding(
 			key.WithKeys("s"),
 			key.WithHelp("s", "toggle spinner"),
@@ -126,14 +114,13 @@ func newListKeyMap() *listKeyMap {
 }
 
 type model struct {
-	list list.Model
-	//itemGenerator *randomItemGenerator
+	list         list.Model
 	keys         *listKeyMap
 	delegateKeys *delegateKeyMap
 	choice       Note
 }
 
-func newModel(title string, headerOnly bool) model {
+func NewFileSelector(title string, headerOnly bool) (model, error) {
 	var (
 		//		itemGenerator randomItemGenerator
 		delegateKeys = newDelegateKeyMap()
@@ -143,30 +130,28 @@ func newModel(title string, headerOnly bool) model {
 	// Make initial list of items
 	notes, err := collectFiles(headerOnly)
 	if err != nil {
-		notes = []Note{}
-		// TODO: uh explode or something
+		return model{}, fmt.Errorf("problem getting files: %w", err)
+	}
+	if len(notes) == 0 {
+		return model{}, fmt.Errorf("no files found")
 	}
 	items := make([]list.Item, len(notes))
 	for i, n := range notes {
 		items[i] = n
 	}
-	//	for i := 0; i < numItems; i++ {
-	//		items[i] = itemGenerator.next()
-	//	}
 
-	// Setup list
-	//delegate := newItemDelegate(delegateKeys)
 	fileList := list.New(items, itemDelegate{}, 0, 0)
 	fileList.Title = title
 	fileList.Styles.Title = titleStyle
+	fileList.AdditionalShortHelpKeys = delegateKeys.ShortHelp
 	fileList.AdditionalFullHelpKeys = func() []key.Binding {
 		return []key.Binding{
+			delegateKeys.choose,
+			listKeys.toggleHelpMenu,
 			listKeys.toggleSpinner,
-			//listKeys.insertItem,
 			listKeys.toggleTitleBar,
 			listKeys.toggleStatusBar,
 			listKeys.togglePagination,
-			listKeys.toggleHelpMenu,
 		}
 	}
 
@@ -174,8 +159,7 @@ func newModel(title string, headerOnly bool) model {
 		list:         fileList,
 		keys:         listKeys,
 		delegateKeys: delegateKeys,
-		//		itemGenerator: &itemGenerator,
-	}
+	}, nil
 }
 
 func (m model) Init() tea.Cmd {
@@ -225,13 +209,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.toggleHelpMenu):
 			m.list.SetShowHelp(!m.list.ShowHelp())
 			return m, nil
-
-			//	case key.Matches(msg, m.keys.insertItem):
-			//		m.delegateKeys.remove.SetEnabled(true)
-			//		//newItem := m.itemGenerator.next()
-			//		insCmd := m.list.InsertItem(0, nil)
-			//		statusCmd := m.list.NewStatusMessage(statusMessageStyle("Added " /*newItem.Title()*/))
-			//		return m, tea.Batch(insCmd, statusCmd)
 		}
 	}
 
