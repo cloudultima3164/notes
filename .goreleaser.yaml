@@ -9,12 +9,15 @@ before:
 builds:
   - env:
       - CGO_ENABLED=0
+    mod_timestamp: '{{ .CommitTimestamp }}'
     ldflags:
-      - -s -w -X main.build={{.Version}}
+      - -s -w -X main.build={{.Version}} -X main.commit={{.Commit}} -X main.date={{ .CommitDate }}
     goos:
       - linux
       - windows
       - darwin
+    flags:
+      - -trimpath
 archives:
   - replacements:
       darwin: Darwin

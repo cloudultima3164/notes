@@ -14,8 +14,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// This gets overwritten at build time with goreleaser
-var build = "dev"
+// These get overwritten at build time with goreleaser
+var (
+	build  = "dev"
+	commit = "local"
+	date   = "20XX-01-01"
+)
 
 const DIVIDER = "------"
 const JOURNAL_DATE_FORMAT = "2006-01-02"
@@ -386,7 +390,7 @@ var newNoteCmd = &cobra.Command{
 var versionCmd = &cobra.Command{
 	Use: "version",
 	Run: func(_ *cobra.Command, _ []string) {
-		fmt.Printf("notes %v\n", build)
+		fmt.Printf("notes %v %v %v\n", build, commit, date)
 	},
 }
 
