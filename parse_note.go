@@ -7,8 +7,19 @@ import (
 	"io"
 	"strings"
 
+	// TODO: match what bubbletea/bubbles is using for fuzzy search then there's less packages needed
 	"github.com/lithammer/fuzzysearch/fuzzy"
 )
+
+var ErrEmptyHeader = errors.New("empty header")
+
+type ErrInvalidHeader struct {
+	line string
+}
+
+func (e ErrInvalidHeader) Error() string {
+	return fmt.Sprintf("could not parse header line: %v", e.line)
+}
 
 //TODO: make parser a bit more robust, in particular we want it to be able to gracefully handle non-note text files
 func ParseNote(reader io.Reader, path string, justHeader bool) (*Note, error) {
@@ -34,13 +45,16 @@ func ParseNote(reader io.Reader, path string, justHeader bool) (*Note, error) {
 			if strings.TrimSpace(curLine) == DIVIDER {
 				isHeader = false
 				curLine = ""
+				if len(result.rawHeader) == 0 {
+					return nil, ErrEmptyHeader
+				}
 				continue
 			}
 			result.rawHeader += fmt.Sprintf("%v\n", curLine)
 			headerData := strings.Split(curLine, ":")
 			if len(headerData) < 2 {
 				fmt.Println(result.rawHeader)
-				return nil, fmt.Errorf("could not parse header line: %v", curLine)
+				return nil, ErrInvalidHeader{line: curLine}
 			}
 			field := headerData[0]
 			value := strings.Join(headerData[1:], ":")
