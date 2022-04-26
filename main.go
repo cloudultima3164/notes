@@ -11,6 +11,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/sahilm/fuzzy"
 	"github.com/spf13/cobra"
 )
 
@@ -46,17 +47,47 @@ func addTimestamp(file *os.File, path string, ts time.Time) error {
 	}
 
 	note.Content = fmt.Sprintf("%v:\n\n\n%v", ts.Format(JOURNAL_DATE_FORMAT), note.Content)
-	out := []byte(fmt.Sprintf("%v%v\n\n%v", note.rawHeader, DIVIDER, note.Content))
-	file.Truncate(0)
-	wrote := 0
-	for written := 0; written <= len(out)-1; written += wrote {
-		wrote, err = file.Write(out[written:])
+	return updateNoteFile(note, file)
+	// out := []byte(fmt.Sprintf("%v%v\n\n%v", note.rawHeader, DIVIDER, note.Content))
+	// file.Truncate(0)
+	// wrote := 0
+	// for written := 0; written <= len(out)-1; written += wrote {
+	// 	wrote, err = file.Write(out[written:])
 
-		if err != nil {
-			return fmt.Errorf("problem writing to file: %w", err)
-		}
+	// 	if err != nil {
+	// 		return fmt.Errorf("problem writing to file: %w", err)
+	// 	}
+	// }
+	// return nil
+}
+
+func addTask(file *os.File, path string, details string) error {
+	note, err := ParseNote(file, path, false)
+	if err != nil {
+		return err
 	}
-	return nil
+
+	var taskWriteLine int
+	firstNewLine := strings.Index(note.Content, "\n")
+	// We only care if newline is after a date or not
+	// If the line is shorter than 10 characters, there is probably no date
+	if firstNewLine > 10 {
+		maybeDate := note.Content[:10]
+		_, err := time.Parse("2006/01/02", maybeDate)
+		if err != nil {
+			taskWriteLine = 0
+		} else {
+			taskWriteLine = 1
+		}
+	} else {
+		taskWriteLine = 0
+	}
+	// We're either adding the task on the first line or after the first newline
+	beforeTask := note.Content[:(firstNewLine*taskWriteLine)+1]
+	afterTask := note.Content[len(beforeTask)+1:]
+	note.Content = beforeTask + fmt.Sprintf("-[]: %v\n", details) + afterTask
+
+	return updateNoteFile(note, file)
 }
 
 func exists(path string) bool {
@@ -106,6 +137,71 @@ func checkExistance(userInput string, wantExistance bool) (string, error) {
 		return "", fmt.Errorf(message, outPath)
 	}
 	return outPath, nil
+}
+
+// Will this work for adding interactive later?
+// Per the comment in var newNoteCmd
+func prepareFileName(cmd *cobra.Command, args []string, wantExistance bool) error {
+	if len(args) == 0 {
+		return nil
+	}
+	preparedFileName, err := checkExistance(args[0], wantExistance)
+	if err != nil {
+		return err
+	}
+	args[0] = preparedFileName
+	cmd.SetArgs(args)
+
+	return nil
+}
+
+func chooseFileInteractive() (model, error) {
+	mod, err := NewFileSelector("Select File to Add a Date Entry to", true)
+	if err != nil {
+		return model{}, fmt.Errorf("could not select a file: %v", err)
+	}
+	m, err := tea.NewProgram(mod).StartReturningModel()
+	if err != nil {
+		return model{}, fmt.Errorf("problem trying to get selection: %v", err)
+	}
+	mod, ok := m.(model)
+	if !ok {
+		return model{}, fmt.Errorf("could not read selection")
+	}
+	return mod, nil
+}
+
+func openNote(args []string) (*os.File, string, error) {
+	var selectedFile string
+	if len(args) == 0 {
+		mod, err := chooseFileInteractive()
+		if err != nil {
+			return nil, "", err
+		}
+		selectedFile = mod.choice.Path
+	} else {
+		selectedFile = args[0]
+	}
+	file, err := os.OpenFile(selectedFile, os.O_RDWR|os.O_APPEND, os.ModePerm)
+	if err != nil {
+		return nil, "", fmt.Errorf("could not open file: %v, %v", args[0], err)
+	}
+	return file, selectedFile, nil
+}
+
+func updateNoteFile(note *Note, file *os.File) error {
+	out := []byte(fmt.Sprintf("%v%v\n\n%v", note.rawHeader, DIVIDER, note.Content))
+	file.Truncate(0)
+	wrote := 0
+	var err error
+	for written := 0; written <= len(out)-1; written += wrote {
+		wrote, err = file.Write(out[written:])
+
+		if err != nil {
+			return fmt.Errorf("problem writing to file: %w", err)
+		}
+	}
+	return nil
 }
 
 // TODO: hmmm maybe a validate files command?
@@ -177,7 +273,7 @@ func CheckTags(input []string) error {
 	in := make(chan string, 10)
 	out := make(chan Note, len(fileList))
 	for i := 0; i < 10; i++ {
-		go parseWorker(in, out, wg, true)
+		go parseWorker(in, out, wg, true, false)
 	}
 	for _, fileName := range fileList {
 		in <- fileName
@@ -187,27 +283,29 @@ func CheckTags(input []string) error {
 	wg.Wait()
 	close(out)
 	for result := range out {
-		for _, val := range result.Tags {
-			if strings.Contains(strings.ToLower(val), strings.ToLower(searchTag)) {
-				fmt.Printf("%v : %v\n", result.Title, result.Path)
-				break
-			}
+		results := fuzzy.Find(searchTag, result.Tags)
+		if results.Len() > 0 {
+			fmt.Printf("%v : %v\n", result.Title, result.Path)
 		}
 	}
 
 	return nil
 }
 
-func parseWorker(in chan string, out chan Note, wg *sync.WaitGroup, justHeader bool) {
+func parseWorker(in chan string, out chan Note, wg *sync.WaitGroup, justHeader, outputErrors bool) {
 	for filename := range in {
 		f, err := os.Open(filename)
 		if err != nil {
-			fmt.Printf("could not open file: %v", err)
+			if outputErrors {
+				fmt.Printf("could not open file: %v", err)
+			}
 			continue
 		}
 		note, err := ParseNote(f, filename, justHeader)
 		if err != nil {
-			fmt.Printf("could not parse file: %v", err)
+			if outputErrors {
+				fmt.Printf("could not parse file: %v", err)
+			}
 			continue
 		}
 		f.Close()
@@ -217,7 +315,7 @@ func parseWorker(in chan string, out chan Note, wg *sync.WaitGroup, justHeader b
 	wg.Done()
 }
 
-func collectFiles(justHeader bool) ([]Note, error) {
+func collectFiles(justHeader, outputFileErrors bool) ([]Note, error) {
 	curDir, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("could not get working directory: %w", err)
@@ -229,7 +327,7 @@ func collectFiles(justHeader bool) ([]Note, error) {
 	in := make(chan string, 10)
 	out := make(chan Note, len(fileList))
 	for i := 0; i < 10; i++ {
-		go parseWorker(in, out, wg, justHeader)
+		go parseWorker(in, out, wg, justHeader, outputFileErrors)
 	}
 	for _, fileName := range fileList {
 		in <- fileName
@@ -248,47 +346,77 @@ func collectFiles(justHeader bool) ([]Note, error) {
 	return results, nil
 }
 
+var addTaskCmd = &cobra.Command{
+	Use:     "task",
+	Example: "notes task [filepath] [task details]",
+	Short:   "append a new task to a note",
+	Long:    "append a new task to a note. if no filepath or task details are provided,  it goes into an interactive mode to select a note and add details.",
+	Args: func(cmd *cobra.Command, args []string) error {
+		return prepareFileName(cmd, args, true)
+	},
+	Run: func(_ *cobra.Command, args []string) {
+		file, path, err := openNote(args)
+		if err != nil {
+			fmt.Printf("%v\n", err)
+		}
+		defer file.Close()
+
+		// TODO: WHERE ARE YOU GETTING DETAILS IF NO ARGS WERE PASSED?!?!
+		err = addTask(file, path, args[1])
+		if err != nil {
+			fmt.Printf("%v\n", err)
+			return
+		}
+	},
+}
+
 var catCmd = &cobra.Command{
 	Use:     "cat",
 	Example: "notes cat [filepath]",
 	Short:   "output the contents of a note",
 	Long:    "output the contents of a note. if no note is specified, it goes into an interactive mode to select a note.",
 	Args: func(cmd *cobra.Command, args []string) error {
-		if len(args) == 0 {
-			return nil
-		}
-		preparedFileName, err := checkExistance(args[0], true)
-		if err != nil {
-			return err
-		}
-		args[0] = preparedFileName
-		cmd.SetArgs(args)
+		return prepareFileName(cmd, args, true)
+		// if len(args) == 0 {
+		// 	return nil
+		// }
+		// preparedFileName, err := checkExistance(args[0], true)
+		// if err != nil {
+		// 	return err
+		// }
+		// args[0] = preparedFileName
+		// cmd.SetArgs(args)
 
-		return nil
+		// return nil
 	},
 	Run: func(_ *cobra.Command, args []string) {
 		if len(args) == 0 {
-			mod, err := NewFileSelector("Select File to Add an Entry to", true)
+			mod, err := chooseFileInteractive()
 			if err != nil {
-				fmt.Printf("Could not select a file: %v", err)
+				fmt.Printf("%v\n", err)
 				return
 			}
-			m, err := tea.NewProgram(mod).StartReturningModel()
-			if err != nil {
-				fmt.Printf("Problem trying to get selection: %v", err)
-				return
-			}
-			mod, ok := m.(model)
-			if !ok {
-				fmt.Println("Could not read selection")
-				return
-			}
-			fmt.Printf("%s", mod.choice.Content)
+			// mod, err := NewFileSelector("Select File to Add an Entry to", true)
+			// if err != nil {
+			// 	fmt.Printf("Could not select a file: %v", err)
+			// 	return
+			// }
+			// m, err := tea.NewProgram(mod).StartReturningModel()
+			// if err != nil {
+			// 	fmt.Printf("Problem trying to get selection: %v", err)
+			// 	return
+			// }
+			// mod, ok := m.(model)
+			// if !ok {
+			// 	fmt.Println("Could not read selection")
+			// 	return
+			// }
+			fmt.Printf("%s\n", mod.choice.Content)
 			return
 
 		}
 		if err := CatNote(args[0]); err != nil {
-			fmt.Printf("Problem trying to cat: %v", err)
+			fmt.Printf("Problem trying to cat: %v\n", err)
 		}
 	},
 }
@@ -311,36 +439,42 @@ var newEntryCmd = &cobra.Command{
 	Long:    "adds today's YYYY-MM-DD date at the top of the provided note. if no note is specified, it goes into an interactive mode to select one.",
 	Example: "notes entry [directory/file]",
 	Args: func(cmd *cobra.Command, args []string) error {
-		if len(args) == 0 {
-			return nil
-		}
-		preparedFileName, err := checkExistance(args[0], true)
-		if err != nil {
-			return err
-		}
-		args[0] = preparedFileName
-		cmd.SetArgs(args)
+		return prepareFileName(cmd, args, true)
+		// if len(args) == 0 {
+		// 	return nil
+		// }
+		// preparedFileName, err := checkExistance(args[0], true)
+		// if err != nil {
+		// 	return err
+		// }
+		// args[0] = preparedFileName
+		// cmd.SetArgs(args)
 
-		return nil
+		// return nil
 	},
 	Run: func(_ *cobra.Command, args []string) {
 		var selectedFile string
 		if len(args) == 0 {
-			mod, err := NewFileSelector("Select File to Add a Date Entry to", true)
+			mod, err := chooseFileInteractive()
 			if err != nil {
-				fmt.Printf("Could not select a file: %v", err)
+				fmt.Printf("%v", err)
 				return
 			}
-			m, err := tea.NewProgram(mod).StartReturningModel()
-			if err != nil {
-				fmt.Printf("Problem trying to get selection: %v", err)
-				return
-			}
-			mod, ok := m.(model)
-			if !ok {
-				fmt.Println("Could not read selection")
-				return
-			}
+			// mod, err := NewFileSelector("Select File to Add a Date Entry to", true)
+			// if err != nil {
+			// 	fmt.Printf("Could not select a file: %v", err)
+			// 	return
+			// }
+			// m, err := tea.NewProgram(mod).StartReturningModel()
+			// if err != nil {
+			// 	fmt.Printf("Problem trying to get selection: %v", err)
+			// 	return
+			// }
+			// mod, ok := m.(model)
+			// if !ok {
+			// 	fmt.Println("Could not read selection")
+			// 	return
+			// }
 			selectedFile = mod.choice.Path
 		} else {
 			selectedFile = args[0]
@@ -367,18 +501,19 @@ var newNoteCmd = &cobra.Command{
 	Aliases: []string{"n"},
 	Short:   "creates a new note at the given path/name",
 	Args: func(cmd *cobra.Command, args []string) error {
-		if len(args) != 1 {
-			return fmt.Errorf("got an unexpected number of args (%v), expected %v", len(args), 1)
-		}
-		// TODO: if no filename is provided go into an interactive mode
-		preparedFileName, err := checkExistance(args[0], false)
-		if err != nil {
-			return err
-		}
-		args[0] = preparedFileName
-		cmd.SetArgs(args)
+		return prepareFileName(cmd, args, false)
+		// if len(args) != 1 {
+		// 	return fmt.Errorf("got an unexpected number of args (%v), expected %v", len(args), 1)
+		// }
+		// // TODO: if no filename is provided go into an interactive mode
+		// preparedFileName, err := checkExistance(args[0], false)
+		// if err != nil {
+		// 	return err
+		// }
+		// args[0] = preparedFileName
+		// cmd.SetArgs(args)
 
-		return nil
+		// return nil
 	},
 	Run: func(_ *cobra.Command, args []string) {
 		if err := NewNoteFile(args[0]); err != nil {
@@ -407,6 +542,7 @@ func init() {
 	rootCmd.AddCommand(catCmd)
 	rootCmd.AddCommand(newNoteCmd)
 	rootCmd.AddCommand(newEntryCmd)
+	rootCmd.AddCommand(addTaskCmd)
 }
 
 func Execute() {
