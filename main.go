@@ -11,6 +11,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/sahilm/fuzzy"
 	"github.com/spf13/cobra"
 )
 
@@ -177,7 +178,7 @@ func CheckTags(input []string) error {
 	in := make(chan string, 10)
 	out := make(chan Note, len(fileList))
 	for i := 0; i < 10; i++ {
-		go parseWorker(in, out, wg, true)
+		go parseWorker(in, out, wg, true, false)
 	}
 	for _, fileName := range fileList {
 		in <- fileName
@@ -187,27 +188,29 @@ func CheckTags(input []string) error {
 	wg.Wait()
 	close(out)
 	for result := range out {
-		for _, val := range result.Tags {
-			if strings.Contains(strings.ToLower(val), strings.ToLower(searchTag)) {
-				fmt.Printf("%v : %v\n", result.Title, result.Path)
-				break
-			}
+		results := fuzzy.Find(searchTag, result.Tags)
+		if results.Len() > 0 {
+			fmt.Printf("%v : %v\n", result.Title, result.Path)
 		}
 	}
 
 	return nil
 }
 
-func parseWorker(in chan string, out chan Note, wg *sync.WaitGroup, justHeader bool) {
+func parseWorker(in chan string, out chan Note, wg *sync.WaitGroup, justHeader, outputErrors bool) {
 	for filename := range in {
 		f, err := os.Open(filename)
 		if err != nil {
-			fmt.Printf("could not open file: %v", err)
+			if outputErrors {
+				fmt.Printf("could not open file: %v", err)
+			}
 			continue
 		}
 		note, err := ParseNote(f, filename, justHeader)
 		if err != nil {
-			fmt.Printf("could not parse file: %v", err)
+			if outputErrors {
+				fmt.Printf("could not parse file: %v", err)
+			}
 			continue
 		}
 		f.Close()
@@ -217,7 +220,7 @@ func parseWorker(in chan string, out chan Note, wg *sync.WaitGroup, justHeader b
 	wg.Done()
 }
 
-func collectFiles(justHeader bool) ([]Note, error) {
+func collectFiles(justHeader, outputFileErrors bool) ([]Note, error) {
 	curDir, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("could not get working directory: %w", err)
@@ -229,7 +232,7 @@ func collectFiles(justHeader bool) ([]Note, error) {
 	in := make(chan string, 10)
 	out := make(chan Note, len(fileList))
 	for i := 0; i < 10; i++ {
-		go parseWorker(in, out, wg, justHeader)
+		go parseWorker(in, out, wg, justHeader, outputFileErrors)
 	}
 	for _, fileName := range fileList {
 		in <- fileName

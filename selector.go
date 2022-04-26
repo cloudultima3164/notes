@@ -128,7 +128,7 @@ func NewFileSelector(title string, headerOnly bool) (model, error) {
 	)
 
 	// Make initial list of items
-	notes, err := collectFiles(headerOnly)
+	notes, err := collectFiles(headerOnly, false)
 	if err != nil {
 		return model{}, fmt.Errorf("problem getting files: %w", err)
 	}

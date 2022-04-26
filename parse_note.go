@@ -6,9 +6,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-
-	// TODO: match what bubbletea/bubbles is using for fuzzy search then there's less packages needed
-	"github.com/lithammer/fuzzysearch/fuzzy"
 )
 
 var ErrEmptyHeader = errors.New("empty header")
@@ -53,7 +50,6 @@ func ParseNote(reader io.Reader, path string, justHeader bool) (*Note, error) {
 			result.rawHeader += fmt.Sprintf("%v\n", curLine)
 			headerData := strings.Split(curLine, ":")
 			if len(headerData) < 2 {
-				fmt.Println(result.rawHeader)
 				return nil, ErrInvalidHeader{line: curLine}
 			}
 			field := headerData[0]
@@ -74,7 +70,7 @@ func ParseNote(reader io.Reader, path string, justHeader bool) (*Note, error) {
 					}
 					contains := false
 					for _, existingTag := range tags {
-						if fuzzy.MatchNormalizedFold(trimmed, existingTag) {
+						if strings.EqualFold(trimmed, existingTag) {
 							contains = true
 						}
 					}
