@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestParse(t *testing.T) {
+func TestParseNote(t *testing.T) {
 	tests := []struct {
 		name        string
 		fileName    string
@@ -84,6 +84,21 @@ tags: bumbumbum, POW, AnotherOneRidesTheBus, !
 			},
 		},
 		{
+			name:        "basic content check",
+			fileName:    "basic.txt",
+			headerOnly:  false,
+			wantedError: nil,
+			want: &Note{
+				Path:    joinPath("basic.txt"),
+				Title:   "lorem",
+				Tags:    []string{"ipsum"},
+				Content: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.\n",
+				rawHeader: `title: lorem
+tags: ipsum
+`,
+			},
+		},
+		{
 			name:        "empty header",
 			fileName:    "bad_header_01.txt",
 			headerOnly:  false,
@@ -137,7 +152,7 @@ tags: bumbumbum, POW, AnotherOneRidesTheBus, !
 				t.Errorf("Tags mismatch:\nexpected: %v\ngot: %v", tt.want.Tags, got.Tags)
 			}
 			if tt.want.Content != got.Content {
-				t.Errorf("Content mismatch:\nexpected: %v\ngot: %v", tt.want.Content, got.Content)
+				t.Errorf("Content mismatch:\nexpected: %+v\ngot: %+v", tt.want.Content, got.Content)
 			}
 			if tt.want.rawHeader != got.rawHeader {
 				t.Errorf("rawHeader mismatch:\nexpected: %v\ngot: %v", tt.want.rawHeader, got.rawHeader)
