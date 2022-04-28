@@ -113,14 +113,14 @@ func newListKeyMap() *listKeyMap {
 	}
 }
 
-type model struct {
+type selectorModel struct {
 	list         list.Model
 	keys         *listKeyMap
 	delegateKeys *delegateKeyMap
 	choice       Note
 }
 
-func NewFileSelector(title string, headerOnly bool) (model, error) {
+func NewFileSelector(title string, headerOnly bool) (selectorModel, error) {
 	var (
 		//		itemGenerator randomItemGenerator
 		delegateKeys = newDelegateKeyMap()
@@ -130,10 +130,10 @@ func NewFileSelector(title string, headerOnly bool) (model, error) {
 	// Make initial list of items
 	notes, err := collectFiles(headerOnly, false)
 	if err != nil {
-		return model{}, fmt.Errorf("problem getting files: %w", err)
+		return selectorModel{}, fmt.Errorf("problem getting files: %w", err)
 	}
 	if len(notes) == 0 {
-		return model{}, fmt.Errorf("no files found")
+		return selectorModel{}, fmt.Errorf("no files found")
 	}
 	items := make([]list.Item, len(notes))
 	for i, n := range notes {
@@ -155,18 +155,18 @@ func NewFileSelector(title string, headerOnly bool) (model, error) {
 		}
 	}
 
-	return model{
+	return selectorModel{
 		list:         fileList,
 		keys:         listKeys,
 		delegateKeys: delegateKeys,
 	}, nil
 }
 
-func (m model) Init() tea.Cmd {
+func (m selectorModel) Init() tea.Cmd {
 	return tea.EnterAltScreen
 }
 
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m selectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
@@ -220,7 +220,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-func (m model) View() string {
+func (m selectorModel) View() string {
 	return appStyle.Render(m.list.View())
 }
 

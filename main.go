@@ -22,24 +22,6 @@ var (
 	date   = "20XX-01-01"
 )
 
-const DIVIDER = "------"
-const JOURNAL_DATE_FORMAT = "2006-01-02"
-
-type Note struct {
-	Path    string
-	Title   string
-	Tags    []string
-	Content string
-	// header may include metadata that's not necessarily tracked in this struct
-	rawHeader string
-}
-
-//func (i Note) Title() string       { return i.Title }
-func (i Note) Description() string { return strings.Join(i.Tags, ", ") }
-func (i Note) FilterValue() string {
-	return fmt.Sprintf("%s%s%s", i.Title, i.Path, strings.Join(i.Tags, ""))
-}
-
 func addTimestamp(file *os.File, path string, ts time.Time) error {
 	note, err := ParseNote(file, path, false)
 	if err != nil {
@@ -271,7 +253,7 @@ var catCmd = &cobra.Command{
 	},
 	Run: func(_ *cobra.Command, args []string) {
 		if len(args) == 0 {
-			mod, err := NewFileSelector("Select File to Add an Entry to", true)
+			mod, err := NewFileSelector("Select File to Print the content from", false)
 			if err != nil {
 				fmt.Printf("Could not select a file: %v", err)
 				return
@@ -281,12 +263,12 @@ var catCmd = &cobra.Command{
 				fmt.Printf("Problem trying to get selection: %v", err)
 				return
 			}
-			mod, ok := m.(model)
+			model, ok := m.(selectorModel)
 			if !ok {
 				fmt.Println("Could not read selection")
 				return
 			}
-			fmt.Printf("%s", mod.choice.Content)
+			fmt.Printf("%s", model.choice.Content)
 			return
 
 		}
@@ -339,7 +321,7 @@ var newEntryCmd = &cobra.Command{
 				fmt.Printf("Problem trying to get selection: %v", err)
 				return
 			}
-			mod, ok := m.(model)
+			mod, ok := m.(selectorModel)
 			if !ok {
 				fmt.Println("Could not read selection")
 				return
