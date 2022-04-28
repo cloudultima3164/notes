@@ -193,11 +193,13 @@ func parseWorker(in chan string, out chan Note, wg *sync.WaitGroup, justHeader, 
 			if outputErrors {
 				fmt.Printf("could not parse file: %v", err)
 			}
+			f.Close()
 			continue
 		}
 		f.Close()
-
-		out <- *note
+		if note != nil {
+			out <- *note
+		}
 	}
 	wg.Done()
 }
@@ -223,16 +225,66 @@ func collectFiles(justHeader, outputFileErrors bool) ([]Note, error) {
 
 	wg.Wait()
 	close(out)
-	results := make([]Note, len(fileList))
-	c := 0
+	results := make([]Note, 0)
 	for result := range out {
-		results[c] = result
-		c++
+		results = append(results, result)
 	}
 
 	return results, nil
 }
 
+var taskCmd = &cobra.Command{
+	Use:     "task",
+	Example: "notes task [filepath] [task]",
+	Short:   "output the contents of a note",
+	Long:    "output the contents of a note. if no note is specified, it goes into an interactive mode to select a note.",
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) == 0 {
+			return nil
+		}
+		preparedFileName, err := checkExistance(args[0], true)
+		if err != nil {
+			return err
+		}
+		args[0] = preparedFileName
+		cmd.SetArgs(args)
+
+		return nil
+	},
+	Run: func(_ *cobra.Command, args []string) {
+		if len(args) == 0 {
+			selectMod, err := NewFileSelector("Select File to Edit Tasks for", false)
+			if err != nil {
+				fmt.Printf("Could not select a file: %v", err)
+				return
+			}
+			m, err := tea.NewProgram(selectMod).StartReturningModel()
+			if err != nil {
+				fmt.Printf("Problem trying to get selection: %v", err)
+				return
+			}
+			model, ok := m.(selectorModel)
+			if !ok {
+				fmt.Println("Could not read selection")
+				return
+			}
+
+			taskViewerMod, err := NewTaskViewer(model.choice)
+			if err != nil {
+				fmt.Printf("Problem updating task: %v\n", err)
+			}
+			if err := tea.NewProgram(taskViewerMod).Start(); err != nil {
+				fmt.Printf("Problem updating task: %v\n", err)
+			}
+
+			return
+
+		}
+		if err := CatNote(args[0]); err != nil {
+			fmt.Printf("Problem trying to cat: %v", err)
+		}
+	},
+}
 var catCmd = &cobra.Command{
 	Use:     "cat",
 	Example: "notes cat [filepath]",
@@ -392,6 +444,7 @@ func init() {
 	rootCmd.AddCommand(catCmd)
 	rootCmd.AddCommand(newNoteCmd)
 	rootCmd.AddCommand(newEntryCmd)
+	rootCmd.AddCommand(taskCmd)
 }
 
 func Execute() {

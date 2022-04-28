@@ -100,5 +100,8 @@ func ParseNote(reader io.Reader, path string, justHeader bool) (*Note, error) {
 	if !justHeader {
 		result.Content = curLine
 	}
+	if len(strings.TrimSpace(result.Title)) == 0 {
+		result.Title = path
+	}
 	return result, nil
 }

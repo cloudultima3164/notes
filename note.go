@@ -37,8 +37,13 @@ const (
 )
 
 type NoteSegment struct {
-	Type    segmentType
-	Content string
+	Type          segmentType
+	Content       string
+	RenderContent string
+}
+
+func (ns NoteSegment) FilterValue() string {
+	return ns.Content
 }
 
 var dateStampRE = regexp.MustCompile(`\s*?[0-9]{2,4}-[0-9]{1,2}-[0-9]{1,2}:`)

@@ -3,12 +3,14 @@ package main
 import (
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
+
+var taskItemStyle = lipgloss.NewStyle().PaddingLeft(4).PaddingRight(4)
 
 type taskListKeyMap struct {
 	toggleSpinner    key.Binding
@@ -42,29 +44,26 @@ func (d taskDelegateKeyMap) FullHelp() [][]key.Binding {
 
 type taskDelegate struct{}
 
-func (d taskDelegate) Height() int                               { return 1 }
-func (d taskDelegate) Spacing() int                              { return 0 }
-func (d taskDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd { return nil }
+func (d taskDelegate) Height() int  { return 12 }
+func (d taskDelegate) Spacing() int { return 0 }
+func (d taskDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd {
+	return nil
+}
 func (d taskDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
-	i, ok := listItem.(Note)
+	i, ok := listItem.(NoteSegment)
 	if !ok {
 		return
 	}
 
-	var tags string
-	if len(i.Tags) > 0 {
-		tags = fmt.Sprintf(": %s", strings.Join(i.Tags, ", "))
-	}
-	str := fmt.Sprintf("%d. %s %s", index+1, i.Title, tags)
-
-	fn := itemStyle.Render
+	fn := taskItemStyle.Width(m.Width()).Render
+	var prefix string
 	if index == m.Index() {
-		fn = func(s string) string {
-			return selectedItemStyle.Render("> " + s)
-		}
+		prefix = "::"
+	} else {
+		prefix = "| "
 	}
 
-	fmt.Fprint(w, fn(str))
+	fmt.Fprint(w, fn(fmt.Sprintf("%v %v", prefix, i.Content)))
 }
 
 func newTaskDelegateKeyMap() *taskDelegateKeyMap {
@@ -218,7 +217,13 @@ func NewTaskViewer(n Note) (taskModel, error) {
 
 	// Make initial list of items
 
-	items := make([]list.Item, 0)
+	segments := Segmentize(n.Content)
+
+	items := make([]list.Item, len(segments))
+	for in, it := range segments {
+		items[in] = it
+	}
+
 	taskList := list.New(items, taskDelegate{}, 0, 0)
 	taskList.Title = fmt.Sprintf("%v: Tasks", n.Title)
 	taskList.Styles.Title = titleStyle
