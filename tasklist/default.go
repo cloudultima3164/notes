@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/reflow/wordwrap"
 )
 
 type DefaultItem interface {
@@ -66,6 +67,7 @@ func (d DefaultTaskDelegate) Height(m Model, index int, item Item) int {
 		return 1
 	}
 	style := d.getStyleForItem(m, index, item)
+	content = wordwrap.String(content, m.Width())
 	h := lipgloss.Height(style.MaxWidth(m.Width()).Render(content))
 	h += d.spacing + 1
 	return h
@@ -115,7 +117,7 @@ func (d DefaultTaskDelegate) Render(w io.Writer, m Model, index int, item Item) 
 	}
 
 	style := d.getStyleForItem(m, index, item)
-
+	content = wordwrap.String(content, m.Width())
 	s := style.Width(m.width).Render(content)
 	fmt.Fprintf(w, "%s", s)
 }

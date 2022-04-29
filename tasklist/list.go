@@ -137,6 +137,7 @@ func (m *Model) SetItems(i []Item) tea.Cmd {
 	//}
 
 	m.updateKeybindings()
+	m.regenerateItemHeights()
 	return cmd
 }
 
@@ -387,7 +388,6 @@ func (m Model) populatedView(availHeight int) string {
 	}
 
 	if len(items) > 0 {
-		// TODO: selecting the correct items for the current cursor?
 		for i, item := range items {
 			m.delegate.Render(&b, m, i+min, item)
 			if i != len(items)-1 {
@@ -428,7 +428,7 @@ func (m Model) VisibleItems(availHeight int) ([]Item, int, int) {
 		if maxIndex+1 < len(m.items) && accHeight+m.itemHeights[maxIndex+1] < availHeight {
 			maxIndex += 1
 			size++
-			accHeight += m.itemHeights[minIndex]
+			accHeight += m.itemHeights[maxIndex]
 		} else {
 			noMoreAbove = true
 		}
