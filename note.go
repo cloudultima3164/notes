@@ -37,13 +37,25 @@ const (
 )
 
 type NoteSegment struct {
-	Type          segmentType
-	Content       string
-	RenderContent string
+	Type       segmentType
+	content    string
+	taskBullet string
 }
 
-func (ns NoteSegment) FilterValue() string {
-	return ns.Content
+func (ns NoteSegment) IsChecked() bool {
+	return len(strings.TrimSpace(ns.taskBullet)) > 0
+}
+
+func (ns *NoteSegment) SetCheck(s string) {
+	ns.taskBullet = s
+}
+
+func (ns NoteSegment) Content() string {
+	if ns.Type == segmentTypeTask {
+		_, content, _ := strings.Cut(ns.content, ":")
+		return fmt.Sprintf("-[%v]:%v", ns.taskBullet, content)
+	}
+	return ns.content
 }
 
 var dateStampRE = regexp.MustCompile(`\s*?[0-9]{2,4}-[0-9]{1,2}-[0-9]{1,2}:`)
@@ -54,7 +66,7 @@ func Segmentize(content string) []NoteSegment {
 		return []NoteSegment{
 			{
 				Type:    segmentTypeEmpty,
-				Content: "",
+				content: "",
 			},
 		}
 	}
@@ -70,21 +82,27 @@ func Segmentize(content string) []NoteSegment {
 		if len(l) == 0 || l == "\n" || l == "\r\n" {
 			segments[i] = NoteSegment{
 				Type:    segmentTypeEmpty,
-				Content: l,
+				content: l,
 			}
 			continue
 		}
 		if dateStampRE.Match([]byte(l)) {
 			segments[i] = NoteSegment{
 				Type:    segmentTypeDate,
-				Content: l,
+				content: l,
 			}
 			continue
 		}
 		if taskRE.Match([]byte(l)) {
+			result := taskRE.FindStringSubmatch(l)
+			taskBullet := ""
+			if len(result) > 1 && len(result[1]) != 0 {
+				taskBullet = result[1]
+			}
 			segments[i] = NoteSegment{
-				Type:    segmentTypeTask,
-				Content: l,
+				Type:       segmentTypeTask,
+				content:    l,
+				taskBullet: taskBullet,
 			}
 			continue
 		}
@@ -92,7 +110,7 @@ func Segmentize(content string) []NoteSegment {
 		// if nothing else matches it should just be plain text
 		segments[i] = NoteSegment{
 			Type:    segmentTypeText,
-			Content: l,
+			content: l,
 		}
 
 	}
@@ -109,7 +127,7 @@ func Desegmentize(segments []NoteSegment) string {
 
 	for i, s := range segments {
 		if s.Type != segmentTypeEmpty {
-			builder.WriteString(fmt.Sprintf("%v", s.Content))
+			builder.WriteString(fmt.Sprintf("%v", s.Content()))
 			if i < len(segments)-1 {
 				builder.WriteString("\n")
 			}

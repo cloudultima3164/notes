@@ -17,7 +17,7 @@ func TestSegmentizeAndDesegmentize(t *testing.T) {
 			segments: []NoteSegment{
 				{
 					Type:    segmentTypeEmpty,
-					Content: "",
+					content: "",
 				},
 			},
 		},
@@ -27,11 +27,11 @@ func TestSegmentizeAndDesegmentize(t *testing.T) {
 			segments: []NoteSegment{
 				{
 					Type:    segmentTypeEmpty,
-					Content: "",
+					content: "",
 				},
 				{
 					Type:    segmentTypeEmpty,
-					Content: "",
+					content: "",
 				},
 			},
 		},
@@ -41,7 +41,7 @@ func TestSegmentizeAndDesegmentize(t *testing.T) {
 			segments: []NoteSegment{
 				{
 					Type:    segmentTypeDate,
-					Content: "2021-02-02:",
+					content: "2021-02-02:",
 				},
 			},
 		},
@@ -51,7 +51,7 @@ func TestSegmentizeAndDesegmentize(t *testing.T) {
 			segments: []NoteSegment{
 				{
 					Type:    segmentTypeDate,
-					Content: "   2021-02-02:   ",
+					content: "   2021-02-02:   ",
 				},
 			},
 		},
@@ -61,7 +61,7 @@ func TestSegmentizeAndDesegmentize(t *testing.T) {
 			segments: []NoteSegment{
 				{
 					Type:    segmentTypeDate,
-					Content: "2021-02-02: some content here",
+					content: "2021-02-02: some content here",
 				},
 			},
 		},
@@ -71,7 +71,7 @@ func TestSegmentizeAndDesegmentize(t *testing.T) {
 			segments: []NoteSegment{
 				{
 					Type:    segmentTypeDate,
-					Content: "  2021-02-02: some content here",
+					content: "  2021-02-02: some content here",
 				},
 			},
 		},
@@ -81,11 +81,11 @@ func TestSegmentizeAndDesegmentize(t *testing.T) {
 			segments: []NoteSegment{
 				{
 					Type:    segmentTypeDate,
-					Content: "  2021-02-02:",
+					content: "  2021-02-02:",
 				},
 				{
 					Type:    segmentTypeText,
-					Content: "some content here",
+					content: "some content here",
 				},
 			},
 		},
@@ -95,15 +95,15 @@ func TestSegmentizeAndDesegmentize(t *testing.T) {
 			segments: []NoteSegment{
 				{
 					Type:    segmentTypeText,
-					Content: "some content here",
+					content: "some content here",
 				},
 				{
 					Type:    segmentTypeEmpty,
-					Content: "",
+					content: "",
 				},
 				{
 					Type:    segmentTypeText,
-					Content: "othercontent",
+					content: "othercontent",
 				},
 			},
 		},
@@ -113,11 +113,11 @@ func TestSegmentizeAndDesegmentize(t *testing.T) {
 			segments: []NoteSegment{
 				{
 					Type:    segmentTypeText,
-					Content: "some content here",
+					content: "some content here",
 				},
 				{
 					Type:    segmentTypeText,
-					Content: "othercontent",
+					content: "othercontent",
 				},
 			},
 		},
@@ -127,7 +127,7 @@ func TestSegmentizeAndDesegmentize(t *testing.T) {
 			segments: []NoteSegment{
 				{
 					Type:    segmentTypeTask,
-					Content: "-[]: sometask",
+					content: "-[]: sometask",
 				},
 			},
 		},
@@ -136,8 +136,9 @@ func TestSegmentizeAndDesegmentize(t *testing.T) {
 			rawContent: "-[x]: sometask",
 			segments: []NoteSegment{
 				{
-					Type:    segmentTypeTask,
-					Content: "-[x]: sometask",
+					Type:       segmentTypeTask,
+					content:    "-[x]: sometask",
+					taskBullet: "x",
 				},
 			},
 		},
@@ -146,8 +147,9 @@ func TestSegmentizeAndDesegmentize(t *testing.T) {
 			rawContent: "-[ ]: sometask",
 			segments: []NoteSegment{
 				{
-					Type:    segmentTypeTask,
-					Content: "-[ ]: sometask",
+					Type:       segmentTypeTask,
+					content:    "-[ ]: sometask",
+					taskBullet: " ",
 				},
 			},
 		},
@@ -156,8 +158,9 @@ func TestSegmentizeAndDesegmentize(t *testing.T) {
 			rawContent: "-[ø]: sometask",
 			segments: []NoteSegment{
 				{
-					Type:    segmentTypeTask,
-					Content: "-[ø]: sometask",
+					Type:       segmentTypeTask,
+					content:    "-[ø]: sometask",
+					taskBullet: "ø",
 				},
 			},
 		},
@@ -167,11 +170,11 @@ func TestSegmentizeAndDesegmentize(t *testing.T) {
 			segments: []NoteSegment{
 				{
 					Type:    segmentTypeTask,
-					Content: "-[]: sometask",
+					content: "-[]: sometask",
 				},
 				{
 					Type:    segmentTypeTask,
-					Content: "-[]: another task",
+					content: "-[]: another task",
 				},
 			},
 		},
