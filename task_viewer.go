@@ -206,7 +206,7 @@ type taskModel struct {
 	list         list.Model
 	keys         *taskListKeyMap
 	delegateKeys *taskDelegateKeyMap
-	note         Note
+	// note         Note
 }
 
 func NewTaskViewer(n Note) (taskModel, error) {
