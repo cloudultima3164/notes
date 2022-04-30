@@ -43,6 +43,18 @@ func addTimestamp(file *os.File, path string, ts time.Time) error {
 	// return nil
 }
 
+func insertValueAtPos[T any](slice *[]T, val T, pos int) {
+	var new T
+	// Add new element to slice
+	*slice = append(*slice, new)
+	dst := (*slice)[pos+1:]
+	src := (*slice)[pos:]
+	// shift elements to right of insert pos
+	copy(dst, src)
+	// insert value at pos
+	(*slice)[pos] = val
+}
+
 func addTask(file *os.File, path string, details string) error {
 	note, err := ParseNote(file, path, false)
 	if err != nil {
@@ -65,10 +77,10 @@ func addTask(file *os.File, path string, details string) error {
 		taskWriteLine = 0
 	}
 	// We're either adding the task on the first line or after the first newline
-	beforeTask := note.Content[:(firstNewLine*taskWriteLine)+1]
-	afterTask := note.Content[len(beforeTask)+1:]
-	note.Content = beforeTask + fmt.Sprintf("-[]: %v\n", details) + afterTask
-
+	newTask := fmt.Sprintf("-[]: %v\n", details)
+	contents := strings.Split(note.Content, "\n")
+	insertValueAtPos(&contents, newTask, taskWriteLine)
+	note.Content = strings.Join(contents, "\n")
 	return updateNoteFile(note, file)
 }
 
@@ -146,30 +158,30 @@ func chooseFileInteractive(title string, headerOnly bool) (selectorModel, error)
 	if err != nil {
 		return selectorModel{}, fmt.Errorf("problem trying to get selection: %v", err)
 	}
-	mod, ok := m.(selectorModel)
+	model, ok := m.(selectorModel)
 	if !ok {
 		return selectorModel{}, fmt.Errorf("could not read selection")
 	}
-	return mod, nil
+	return model, nil
 }
 
-func openNote(args []string, interactive_title string, headerOnly bool) (*os.File, string, error) {
-	var selectedFile string
-	if len(args) == 0 {
-		mod, err := chooseFileInteractive(interactive_title, headerOnly)
-		if err != nil {
-			return nil, "", err
-		}
-		selectedFile = mod.choice.Path
-	} else {
-		selectedFile = args[0]
-	}
-	file, err := os.OpenFile(selectedFile, os.O_RDWR|os.O_APPEND, os.ModePerm)
-	if err != nil {
-		return nil, "", fmt.Errorf("could not open file: %v, %v", args[0], err)
-	}
-	return file, selectedFile, nil
-}
+// func openNote(args []string, interactive_title string, headerOnly bool) (*os.File, string, error) {
+// 	var selectedFile string
+// 	if len(args) == 0 {
+// 		mod, err := chooseFileInteractive(interactive_title, headerOnly)
+// 		if err != nil {
+// 			return nil, "", err
+// 		}
+// 		selectedFile = mod.choice.Path
+// 	} else {
+// 		selectedFile = args[0]
+// 	}
+// 	file, err := os.OpenFile(selectedFile, os.O_RDWR|os.O_APPEND, os.ModePerm)
+// 	if err != nil {
+// 		return nil, "", fmt.Errorf("could not open file: %v, %v", args[0], err)
+// 	}
+// 	return file, selectedFile, nil
+// }
 
 func updateNoteFile(note *Note, file *os.File) error {
 	out := []byte(fmt.Sprintf("%v%v\n\n%v", note.rawHeader, DIVIDER, note.Content))
@@ -348,25 +360,30 @@ var taskCmd = &cobra.Command{
 	},
 	Run: func(_ *cobra.Command, args []string) {
 		if len(args) == 0 {
-			selectMod, err := NewFileSelector("Select File to Edit Tasks for", false)
+			// selectMod, err := NewFileSelector("Select File to Edit Tasks for", false)
+			// if err != nil {
+			// 	fmt.Printf("Could not select a file: %v", err)
+			// 	return
+			// }
+			// m, err := tea.NewProgram(selectMod).StartReturningModel()
+			// if err != nil {
+			// 	fmt.Printf("Problem trying to get selection: %v", err)
+			// 	return
+			// }
+			// model, ok := m.(selectorModel)
+			// if !ok {
+			// 	fmt.Println("Could not read selection")
+			// 	return
+			// }
+			model, err := chooseFileInteractive("Select File to Edit Tasks for", false)
 			if err != nil {
-				fmt.Printf("Could not select a file: %v", err)
+				fmt.Printf("%v\n", err)
 				return
 			}
-			m, err := tea.NewProgram(selectMod).StartReturningModel()
-			if err != nil {
-				fmt.Printf("Problem trying to get selection: %v", err)
-				return
-			}
-			model, ok := m.(selectorModel)
-			if !ok {
-				fmt.Println("Could not read selection")
-				return
-			}
-
 			taskViewerMod, err := NewTaskViewer(model.choice)
 			if err != nil {
 				fmt.Printf("Problem updating task: %v\n", err)
+				return
 			}
 			if err := tea.NewProgram(taskViewerMod).Start(); err != nil {
 				fmt.Printf("Problem updating task: %v\n", err)
@@ -401,14 +418,43 @@ var newTaskCmd = &cobra.Command{
 		return nil
 	},
 	Run: func(_ *cobra.Command, args []string) {
-		file, path, err := openNote(args, "Select File to Add Task", false)
+		// file, path, err := openNote(args, "Select File to Add Task", false)
+		var path string
+		var details string
+		if len(args) == 0 {
+			pathModel, err := chooseFileInteractive("Select File to Add Task", false)
+			if err != nil {
+				fmt.Printf("%v\n", err)
+				return
+			}
+			detailsModel := NewTaskAdd()
+			if err := detailsModel.StartGetTaskDetails(); err != nil {
+				fmt.Printf("Problem getting task details: %v\n", err)
+				return
+			}
+			path = pathModel.choice.Path
+			details = detailsModel.result
+			if details == "" {
+				fmt.Printf("Expected task details, but got nothing.\n")
+				return
+			}
+
+		} else {
+			if len(args) == 1 {
+				fmt.Printf("Expected 2 arguments but got 1")
+				return
+			}
+			path = args[0]
+			details = args[1]
+		}
+		file, err := os.OpenFile(path, os.O_RDWR|os.O_APPEND, os.ModePerm)
 		if err != nil {
-			fmt.Printf("%v\n", err)
+			fmt.Printf("Could not open file: %v, %v", path, err)
+			return
 		}
 		defer file.Close()
 
-		// TODO: WHERE ARE YOU GETTING DETAILS IF NO ARGS WERE PASSED?!?!
-		err = addTask(file, path, args[1])
+		err = addTask(file, path, details)
 		if err != nil {
 			fmt.Printf("%v\n", err)
 			return
