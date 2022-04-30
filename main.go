@@ -141,22 +141,22 @@ func checkExistance(userInput string, wantExistance bool) (string, error) {
 
 // Will this work for adding interactive later?
 // Per the comment in var newNoteCmd
-func prepareFileName(cmd *cobra.Command, args []string, wantExistance bool) error {
-	if len(args) == 0 {
-		return nil
-	}
-	preparedFileName, err := checkExistance(args[0], wantExistance)
-	if err != nil {
-		return err
-	}
-	args[0] = preparedFileName
-	cmd.SetArgs(args)
+// func prepareFileName(cmd *cobra.Command, args []string, wantExistance bool) error {
+// if len(args) == 0 {
+// 	return nil
+// }
+// preparedFileName, err := checkExistance(args[0], wantExistance)
+// if err != nil {
+// 	return err
+// }
+// args[0] = preparedFileName
+// cmd.SetArgs(args)
 
-	return nil
-}
+// return nil
+// }
 
-func chooseFileInteractive() (model, error) {
-	mod, err := NewFileSelector("Select File to Add a Date Entry to", true)
+func chooseFileInteractive(title string) (model, error) {
+	mod, err := NewFileSelector(title, true)
 	if err != nil {
 		return model{}, fmt.Errorf("could not select a file: %v", err)
 	}
@@ -171,10 +171,10 @@ func chooseFileInteractive() (model, error) {
 	return mod, nil
 }
 
-func openNote(args []string) (*os.File, string, error) {
+func openNote(args []string, interactive_title string) (*os.File, string, error) {
 	var selectedFile string
 	if len(args) == 0 {
-		mod, err := chooseFileInteractive()
+		mod, err := chooseFileInteractive(interactive_title)
 		if err != nil {
 			return nil, "", err
 		}
@@ -346,16 +346,27 @@ func collectFiles(justHeader, outputFileErrors bool) ([]Note, error) {
 	return results, nil
 }
 
-var addTaskCmd = &cobra.Command{
-	Use:     "task",
-	Example: "notes task [filepath] [task details]",
+var newTaskCmd = &cobra.Command{
+	Use:     "new",
+	Example: "notes task new [filepath] [task details]",
 	Short:   "append a new task to a note",
 	Long:    "append a new task to a note. if no filepath or task details are provided,  it goes into an interactive mode to select a note and add details.",
 	Args: func(cmd *cobra.Command, args []string) error {
-		return prepareFileName(cmd, args, true)
+		// return prepareFileName(cmd, args, true)
+		if len(args) == 0 {
+			return nil
+		}
+		preparedFileName, err := checkExistance(args[0], true)
+		if err != nil {
+			return err
+		}
+		args[0] = preparedFileName
+		cmd.SetArgs(args)
+
+		return nil
 	},
 	Run: func(_ *cobra.Command, args []string) {
-		file, path, err := openNote(args)
+		file, path, err := openNote(args, "Select File to Add Task")
 		if err != nil {
 			fmt.Printf("%v\n", err)
 		}
@@ -376,22 +387,22 @@ var catCmd = &cobra.Command{
 	Short:   "output the contents of a note",
 	Long:    "output the contents of a note. if no note is specified, it goes into an interactive mode to select a note.",
 	Args: func(cmd *cobra.Command, args []string) error {
-		return prepareFileName(cmd, args, true)
-		// if len(args) == 0 {
-		// 	return nil
-		// }
-		// preparedFileName, err := checkExistance(args[0], true)
-		// if err != nil {
-		// 	return err
-		// }
-		// args[0] = preparedFileName
-		// cmd.SetArgs(args)
+		// return prepareFileName(cmd, args, true)
+		if len(args) == 0 {
+			return nil
+		}
+		preparedFileName, err := checkExistance(args[0], true)
+		if err != nil {
+			return err
+		}
+		args[0] = preparedFileName
+		cmd.SetArgs(args)
 
-		// return nil
+		return nil
 	},
 	Run: func(_ *cobra.Command, args []string) {
 		if len(args) == 0 {
-			mod, err := chooseFileInteractive()
+			mod, err := chooseFileInteractive("Select File to Output to Terminal")
 			if err != nil {
 				fmt.Printf("%v\n", err)
 				return
@@ -439,23 +450,23 @@ var newEntryCmd = &cobra.Command{
 	Long:    "adds today's YYYY-MM-DD date at the top of the provided note. if no note is specified, it goes into an interactive mode to select one.",
 	Example: "notes entry [directory/file]",
 	Args: func(cmd *cobra.Command, args []string) error {
-		return prepareFileName(cmd, args, true)
-		// if len(args) == 0 {
-		// 	return nil
-		// }
-		// preparedFileName, err := checkExistance(args[0], true)
-		// if err != nil {
-		// 	return err
-		// }
-		// args[0] = preparedFileName
-		// cmd.SetArgs(args)
+		// return prepareFileName(cmd, args, true)
+		if len(args) == 0 {
+			return nil
+		}
+		preparedFileName, err := checkExistance(args[0], true)
+		if err != nil {
+			return err
+		}
+		args[0] = preparedFileName
+		cmd.SetArgs(args)
 
-		// return nil
+		return nil
 	},
 	Run: func(_ *cobra.Command, args []string) {
 		var selectedFile string
 		if len(args) == 0 {
-			mod, err := chooseFileInteractive()
+			mod, err := chooseFileInteractive("Select File to Add a Date Entry to")
 			if err != nil {
 				fmt.Printf("%v", err)
 				return
@@ -501,19 +512,19 @@ var newNoteCmd = &cobra.Command{
 	Aliases: []string{"n"},
 	Short:   "creates a new note at the given path/name",
 	Args: func(cmd *cobra.Command, args []string) error {
-		return prepareFileName(cmd, args, false)
-		// if len(args) != 1 {
-		// 	return fmt.Errorf("got an unexpected number of args (%v), expected %v", len(args), 1)
-		// }
-		// // TODO: if no filename is provided go into an interactive mode
-		// preparedFileName, err := checkExistance(args[0], false)
-		// if err != nil {
-		// 	return err
-		// }
-		// args[0] = preparedFileName
-		// cmd.SetArgs(args)
+		// return prepareFileName(cmd, args, false)
+		if len(args) != 1 {
+			return fmt.Errorf("got an unexpected number of args (%v), expected %v", len(args), 1)
+		}
+		// TODO: if no filename is provided go into an interactive mode
+		preparedFileName, err := checkExistance(args[0], false)
+		if err != nil {
+			return err
+		}
+		args[0] = preparedFileName
+		cmd.SetArgs(args)
 
-		// return nil
+		return nil
 	},
 	Run: func(_ *cobra.Command, args []string) {
 		if err := NewNoteFile(args[0]); err != nil {
@@ -542,7 +553,7 @@ func init() {
 	rootCmd.AddCommand(catCmd)
 	rootCmd.AddCommand(newNoteCmd)
 	rootCmd.AddCommand(newEntryCmd)
-	rootCmd.AddCommand(addTaskCmd)
+	rootCmd.AddCommand(newTaskCmd)
 }
 
 func Execute() {
